@@ -68,8 +68,8 @@ const ChatBot = () => {
       let hasReportGenerated = false;
       let pdfPath = null;
 
-      if (data.intent) {
-        botContent = data.intent;
+      if (data.response) {
+        botContent = data.response;
       } else if (data.response) {
         botContent = data.response;
       }
