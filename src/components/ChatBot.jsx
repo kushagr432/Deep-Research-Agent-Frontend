@@ -1,4 +1,4 @@
-import { Bot, FileText, Loader2, Search, Send, User } from 'lucide-react';
+import { BarChart3, Bot, FileText, Loader2, Search, Send, User } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import './ChatBot.css';
 
@@ -15,6 +15,7 @@ const ChatBot = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [deepResearch, setDeepResearch] = useState(false);
   const [generateReport, setGenerateReport] = useState(false);
+  const [generateDashboard, setGenerateDashboard] = useState(false);
   const [sessionId] = useState(`session_${Date.now()}`);
   const messagesEndRef = useRef(null);
 
@@ -45,6 +46,7 @@ const ChatBot = () => {
         user_query: inputValue,
         deep_research: deepResearch,
         generate_report: deepResearch && generateReport,
+        generate_dashboard: deepResearch && generateDashboard,
         session_id: sessionId
       };
 
@@ -84,11 +86,26 @@ const ChatBot = () => {
         hasReportGenerated = data.report_generated;
       }
 
+      // Check if dashboard was generated
+      let hasDashboardGenerated = false;
+      let dashboardPath = null;
+      if (data.dashboard_generated !== undefined) {
+        hasDashboardGenerated = data.dashboard_generated;
+      }
+
+      // Get dashboard path if available and extract filename
+      if (data.dashboard_path) {
+        // Remove "dashboards/" or "reports/" prefix and get just the filename
+        const fullPath = data.dashboard_path;
+        const fileName = fullPath.replace(/^reports[\/\\]/, '');
+        dashboardPath = fileName;
+      }
+
       // Get PDF path if available and extract filename
       if (data.pdf_report_path) {
-        // Remove "reports\\" prefix and get just the filename
+        // Remove "reports/" prefix and get just the filename
         const fullPath = data.pdf_report_path;
-        const fileName = fullPath.replace(/^reports\\/, '');
+        const fileName = fullPath.replace(/^reports[\/\\]/, '');
         pdfPath = fileName;
       }
 
@@ -99,7 +116,9 @@ const ChatBot = () => {
         timestamp: new Date().toLocaleTimeString(),
         isDeepResearch: isDeepResearchResponse,
         hasReport: hasReportGenerated,
-        pdfPath: pdfPath
+        pdfPath: pdfPath,
+        hasDashboard: hasDashboardGenerated,
+        dashboardPath: dashboardPath
       };
 
       setMessages(prev => [...prev, botMessage]);
@@ -177,6 +196,47 @@ const ChatBot = () => {
     }
   };
 
+  const handleDownloadDashboard = async (fileName) => {
+    if (fileName) {
+      try {
+        // Call the download-dashboard API endpoint with just the filename
+        const response = await fetch(`http://localhost:8000/download-dashboard/${fileName}`, {
+          method: 'GET',
+        });
+
+        if (!response.ok) {
+          throw new Error(`Download failed: ${response.status}`);
+        }
+
+        // Get the blob from the response
+        const blob = await response.blob();
+        
+        // Create a download link
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        
+        // Clean up
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Download error:', error);
+        // Show error message to user
+        const errorMsg = {
+          id: Date.now() + 1,
+          type: 'bot',
+          content: `Failed to download dashboard: ${error.message}`,
+          timestamp: new Date().toLocaleTimeString(),
+          isError: true
+        };
+        setMessages(prev => [...prev, errorMsg]);
+      }
+    }
+  };
+
   return (
     <div className="chatbot-container">
       <div className="chatbot-header">
@@ -204,15 +264,26 @@ const ChatBot = () => {
             Deep Research
           </label>
           {deepResearch && (
-            <label className="option-label sub-option">
-              <input
-                type="checkbox"
-                checked={generateReport}
-                onChange={(e) => setGenerateReport(e.target.checked)}
-              />
-              <FileText className="option-icon" />
-              Generate PDF Report
-            </label>
+            <>
+              <label className="option-label sub-option">
+                <input
+                  type="checkbox"
+                  checked={generateReport}
+                  onChange={(e) => setGenerateReport(e.target.checked)}
+                />
+                <FileText className="option-icon" />
+                Generate PDF Report
+              </label>
+              <label className="option-label sub-option">
+                <input
+                  type="checkbox"
+                  checked={generateDashboard}
+                  onChange={(e) => setGenerateDashboard(e.target.checked)}
+                />
+                <BarChart3 className="option-icon" />
+                Generate Dashboard
+              </label>
+            </>
           )}
         </div>
       </div>
@@ -247,6 +318,22 @@ const ChatBot = () => {
                   >
                     <FileText className="download-icon" />
                     Download {message.pdfPath.length > 20 ? message.pdfPath.substring(0, 20) + '...' : message.pdfPath}
+                  </button>
+                )}
+                {message.hasDashboard && (
+                  <span className="badge dashboard">
+                    <BarChart3 className="badge-icon" />
+                    Dashboard
+                  </span>
+                )}
+                {message.dashboardPath && (
+                  <button 
+                    className="download-button"
+                    onClick={() => handleDownloadDashboard(message.dashboardPath)}
+                    title={`Download: ${message.dashboardPath}`}
+                  >
+                    <BarChart3 className="download-icon" />
+                    Download Dashboard {message.dashboardPath.length > 20 ? message.dashboardPath.substring(0, 20) + '...' : message.dashboardPath}
                   </button>
                 )}
                 {message.isError && (
